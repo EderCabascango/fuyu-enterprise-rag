@@ -11,13 +11,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 1. Login en Azure (Este paso ya te funcionaba)
+      # 1. Login en Azure usando tu Service Principal
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 2. Login en ACR extrayendo los datos del JSON que ya existe
+      # 2. Login en el Registro (ACR) extrayendo datos del JSON de Azure
       - name: Log in to ACR
         uses: azure/docker-login@v1
         with:
@@ -25,13 +25,13 @@ jobs:
           username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
 
-      # 3. Build y Push
+      # 3. Construcción y subida de la imagen de Docker
       - name: Build and push image
         run: |
           docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
 
-      # 4. Despliegue usando los mismos datos del JSON
+      # 4. Despliegue en la Container App
       - name: Deploy to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
@@ -43,3 +43,7 @@ jobs:
           registryPassword: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
           targetPort: 8000
           ingress: external
+          # Inyectamos variables temporales para evitar que el contenedor crashee al inicio
+          envVars: |
+            AZURE_OPENAI_API_KEY=placeholder
+            AZURE_OPENAI_ENDPOINT=https://placeholder.openai.azure.com/
