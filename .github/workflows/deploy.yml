@@ -2,7 +2,7 @@ name: Deploy Fuyu RAG to Azure
 
 on:
   push:
-    branches: [ "main" ] # Se activa al hacer push a la rama main
+    branches: [ "main" ]
 
 jobs:
   build-and-deploy:
@@ -11,30 +11,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 1. Loguearse en Azure con el Service Principal
+      # 1. Login en Azure
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 2. Loguearse en el ACR y subir la imagen de Docker
-      - name: Build and push image to ACR
+      # 2. Login en ACR usando el Service Principal (Extraemos datos del JSON)
+      - name: Log in to ACR
         run: |
-          az acr login --name ca19777e4b99acr
+          CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)
+          CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientSecret)
+          echo $CLIENT_SECRET | docker login ca19777e4b99acr.azurecr.io -u $CLIENT_ID --password-stdin
+
+      # 3. Build y Push
+      - name: Build and push image
+        run: |
           docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
 
-      # 3. Desplegar en la Container App usando las credenciales del registro
+      # 4. Despliegue en Container App
       - name: Deploy to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
           containerAppName: fuyu-tutor-wladimir
           resourceGroup: rg-fuyu-mlops
           imageToDeploy: ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
-          # Aquí es donde inyectamos las llaves que configuramos en los secrets
+          # Usamos los datos del Service Principal para el registro
           registryUrl: ca19777e4b99acr.azurecr.io
-          registryUsername: ${{ secrets.ACR_USERNAME }}
-          registryPassword: ${{ secrets.ACR_PASSWORD }}
-          # Puerto de salida (Chainlit usa el 8000 por defecto)
+          registryUsername: 33befc6c-8a94-4fed-8ab3-976f25fc5868
+          registryPassword: ${{ secrets.ACR_PASSWORD }} # O el ClientSecret del SP
           targetPort: 8000
           ingress: external
