@@ -8,62 +8,64 @@ from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.aio import SearchClient 
 from azure.monitor.opentelemetry import configure_azure_monitor
 
+# 1. FILTRADO DE LOGS (Crucial para MLOps)
+# Esto silencia el ruido de "Transmission succeeded" que vimos en tu captura
+logging.getLogger("azure").setLevel(logging.WARNING)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+
 load_dotenv()
 
-# 1. ACTIVAR MONITOREO (Debe ir antes de cualquier cliente)
-# Esto enviará logs, métricas y trazas automáticamente a Application Insights
+# 2. ACTIVAR MONITOREO
 if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     configure_azure_monitor()
-    logging.info("MLOps: Observabilidad de Azure activada.")
+    logging.info("🚀 MLOps: Telemetría conectada y activa.")
 
-# 2. CONFIGURACIÓN DE CLIENTES (Mapeo de variables de Azure)
-# Ajusté "AZURE_OPENAI_KEY" a "AZURE_OPENAI_API_KEY" para que coincida con tu terminal
+# Configuración de constantes para evitar errores de "hard-coding"
+MODEL_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+
 aoai_client = AsyncAzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"), 
     api_version="2024-08-01-preview",
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
 
-# --- FUNCIÓN DE EVALUACIÓN (LLM-AS-A-JUDGE) ---
+# --- FUNCIÓN DE EVALUACIÓN ---
 async def evaluate_rag(question, context, answer):
     eval_prompt = f"""
-    Actúa como un auditor de calidad de IA. Evalúa la siguiente respuesta basándote SOLO en el contexto proporcionado.
-    
+    Actúa como un auditor de calidad de IA. Evalúa la respuesta basándote SOLO en el contexto.
     Pregunta: {question}
     Contexto: {context}
     Respuesta: {answer}
-    
-    Devuelve un JSON con este formato:
-    {{
-        "fidelidad": (puntuación 0-10 si la respuesta está en el contexto),
-        "relevancia": (puntuación 0-10 si responde a la duda),
-        "razonamiento": (breve explicación de por qué esa nota)
-    }}
+    Devuelve un JSON con: fidelidad (0-10), relevancia (0-10) y razonamiento.
     """
     
-    res = await aoai_client.chat.completions.create(
-        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
-        messages=[{"role": "system", "content": "Eres un experto en MLOps evaluando RAG. Responde solo en JSON."},
-                  {"role": "user", "content": eval_prompt}],
-        response_format={ "type": "json_object" }
-    )
-    return json.loads(res.choices[0].message.content)
+    try:
+        res = await aoai_client.chat.completions.create(
+            model=MODEL_NAME, # Usamos la constante
+            messages=[{"role": "system", "content": "Eres un experto en MLOps. Responde solo en JSON."},
+                      {"role": "user", "content": eval_prompt}],
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(res.choices[0].message.content)
+    except Exception as e:
+        logging.error(f"Error en LLM-as-a-Judge: {e}")
+        return {"fidelidad": 0, "relevancia": 0, "razonamiento": "Error en evaluación."}
 
 @cl.on_chat_start
 async def start():
-    logging.info("Sesión de chat iniciada por el usuario.")
-    await cl.Message(content="🤖 **Tutor AI-300 + Auditor MLOps**. Ahora evaluaré cada respuesta en tiempo real.").send()
+    logging.info("Nueva sesión iniciada.")
+    await cl.Message(content="🤖 **Tutor AI-300 + Auditor MLOps**. Sistema listo y monitoreado.").send()
 
 @cl.on_message
 async def main(message: cl.Message):
-    # Inicializamos el cliente de búsqueda dentro del mensaje
     search_client = SearchClient(
         endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"),
         index_name="fuyu-enterprise-index",
         credential=AzureKeyCredential(os.getenv("AZURE_SEARCH_KEY"))
     )
 
-    # 1. Vectorizar (Usamos el modelo text-embedding-3-large como definiste)
+    # 1. Vectorizar
     emb = await aoai_client.embeddings.create(input=message.content, model="text-embedding-3-large")
     
     # 2. Búsqueda Híbrida
@@ -85,7 +87,7 @@ async def main(message: cl.Message):
     full_answer = ""
     
     response = await aoai_client.chat.completions.create(
-        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
+        model=MODEL_NAME, # Usamos la constante
         messages=[
             {"role": "system", "content": "Responde solo basado en el contexto. Cita fuentes como (Fuente 1)."},
             {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {message.content}"}
@@ -99,27 +101,17 @@ async def main(message: cl.Message):
             full_answer += token
             await msg.stream_token(token)
 
-    # 4. EVALUACIÓN AUTOMÁTICA
-    try:
-        evaluation = await evaluate_rag(message.content, context, full_answer)
-        
-        eval_text = f"""
-### 📊 Métricas de Calidad
-* **Fidelidad:** {evaluation['fidelidad']}/10
-* **Relevancia:** {evaluation['relevancia']}/10
+    # 4. EVALUACIÓN Y CIERRE DE LOGS
+    evaluation = await evaluate_rag(message.content, context, full_answer)
+    
+    eval_text = f"### 📊 Métricas\n* **Fidelidad:** {evaluation['fidelidad']}\n* **Relevancia:** {evaluation['relevancia']}\n\n**Razonamiento:**\n{evaluation['razonamiento']}"
+    
+    source_elements = [cl.Text(name="⚖️ Evaluación", content=eval_text, display="side")]
+    for i, text in enumerate(context_list):
+        source_elements.append(cl.Text(name=f"Fuente {i+1}", content=text, display="side"))
 
-**Razonamiento:**
-{evaluation['razonamiento']}
-        """
-        
-        source_elements = [cl.Text(name="⚖️ Evaluación MLOps", content=eval_text, display="side")]
-        for i, text in enumerate(context_list):
-            source_elements.append(cl.Text(name=f"Fuente {i+1}", content=text, display="side"))
-
-        msg.elements = source_elements
-        await msg.update()
-        logging.info(f"Respuesta generada y evaluada. Fidelidad: {evaluation['fidelidad']}")
-
-    except Exception as e:
-        logging.error(f"Error en la evaluación: {e}")
-        await cl.ErrorMessage(content="Error al generar métricas de auditoría.").send()
+    msg.elements = source_elements
+    await msg.update()
+    
+    # Este log ahora viajará limpio a App Insights
+    logging.info(f"MLOps Eval - Q: {message.content[:30]}... | F: {evaluation['fidelidad']}")
