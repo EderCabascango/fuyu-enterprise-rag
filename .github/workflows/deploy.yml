@@ -11,20 +11,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 1. Login en Azure (Para comandos az)
+      # 1. Login en Azure (Este paso ya te funcionaba)
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 2. Login en ACR usando la Acción oficial (Evita errores de TTY)
+      # 2. Login en ACR extrayendo los datos del JSON que ya existe
       - name: Log in to ACR
         uses: azure/docker-login@v1
         with:
           login-server: ca19777e4b99acr.azurecr.io
-          # Usamos tu Service Principal que ya tiene permisos AcrPush/AcrPull
-          username: 33befc6c-8a94-4fed-8ab3-976f25fc5868
-          password: ${{ secrets.ACR_PASSWORD }}
+          username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
 
       # 3. Build y Push
       - name: Build and push image
@@ -32,7 +31,7 @@ jobs:
           docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
 
-      # 4. Despliegue en Container App
+      # 4. Despliegue usando los mismos datos del JSON
       - name: Deploy to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
@@ -40,7 +39,7 @@ jobs:
           resourceGroup: rg-fuyu-mlops
           imageToDeploy: ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           registryUrl: ca19777e4b99acr.azurecr.io
-          registryUsername: 33befc6c-8a94-4fed-8ab3-976f25fc5868
-          registryPassword: ${{ secrets.ACR_PASSWORD }}
+          registryUsername: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          registryPassword: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
           targetPort: 8000
           ingress: external
