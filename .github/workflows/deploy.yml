@@ -11,22 +11,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 1. Login en Azure (Para comandos az)
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Login en el almacén (ACR) usando los secretos de GitHub directamente
+      # 2. Login en ACR usando la Acción oficial (Evita errores de TTY)
       - name: Log in to ACR
-        run: |
-          # Usamos el Client ID del Service Principal que ya tienes
-          echo "${{ secrets.ACR_PASSWORD }}" | docker login ca19777e4b99acr.azurecr.io -u 33befc6c-8a94-4fed-8ab3-976f25fc5868 --password-stdin
+        uses: azure/docker-login@v1
+        with:
+          login-server: ca19777e4b99acr.azurecr.io
+          # Usamos tu Service Principal que ya tiene permisos AcrPush/AcrPull
+          username: 33befc6c-8a94-4fed-8ab3-976f25fc5868
+          password: ${{ secrets.ACR_PASSWORD }}
 
+      # 3. Build y Push
       - name: Build and push image
         run: |
           docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
 
+      # 4. Despliegue en Container App
       - name: Deploy to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
@@ -34,7 +40,6 @@ jobs:
           resourceGroup: rg-fuyu-mlops
           imageToDeploy: ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           registryUrl: ca19777e4b99acr.azurecr.io
-          # Aquí mandamos las credenciales fijas para que la App no se pierda
           registryUsername: 33befc6c-8a94-4fed-8ab3-976f25fc5868
           registryPassword: ${{ secrets.ACR_PASSWORD }}
           targetPort: 8000
