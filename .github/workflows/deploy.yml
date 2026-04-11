@@ -11,35 +11,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 1. Login en Azure
       - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 2. Login en ACR usando el Service Principal (Extraemos datos del JSON)
+      # Login en el almacén (ACR) usando los secretos de GitHub directamente
       - name: Log in to ACR
         run: |
-          CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)
-          CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientSecret)
-          echo $CLIENT_SECRET | docker login ca19777e4b99acr.azurecr.io -u $CLIENT_ID --password-stdin
+          # Usamos el Client ID del Service Principal que ya tienes
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login ca19777e4b99acr.azurecr.io -u 33befc6c-8a94-4fed-8ab3-976f25fc5868 --password-stdin
 
-      # 3. Build y Push
       - name: Build and push image
         run: |
           docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
           docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
 
-      # 4. Despliegue en Container App
       - name: Deploy to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
           containerAppName: fuyu-tutor-wladimir
           resourceGroup: rg-fuyu-mlops
           imageToDeploy: ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
-          # Usamos los datos del Service Principal para el registro
           registryUrl: ca19777e4b99acr.azurecr.io
+          # Aquí mandamos las credenciales fijas para que la App no se pierda
           registryUsername: 33befc6c-8a94-4fed-8ab3-976f25fc5868
-          registryPassword: ${{ secrets.ACR_PASSWORD }} # O el ClientSecret del SP
+          registryPassword: ${{ secrets.ACR_PASSWORD }}
           targetPort: 8000
           ingress: external
