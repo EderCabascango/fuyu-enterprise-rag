@@ -1,0 +1,14 @@
+# --- SEGURIDAD (CRÍTICO) ---
+.env
+
+# --- ENTORNOS VIRTUALES ---
+.venv/
+env/
+venv/
+ENV/
+
+# --- DATOS Y CACHÉ ---
+__pycache__/
+.files/
+.chainlit/
+data/
