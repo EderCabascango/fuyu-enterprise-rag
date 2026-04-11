@@ -1,0 +1,30 @@
+name: Deploy Fuyu RAG to Azure
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build and push image to ACR
+        run: |
+          az acr login --name ca19777e4b99acr
+          docker build . -t ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
+          docker push ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
+
+      - name: Deploy to Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          containerAppName: fuyu-tutor-wladimir
+          resourceGroup: rg-fuyu-mlops
+          imageToDeploy: ca19777e4b99acr.azurecr.io/fuyu-tutor:latest
