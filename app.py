@@ -1,15 +1,25 @@
 import os
 import json
+import logging
 import chainlit as cl
 from dotenv import load_dotenv
 from openai import AsyncAzureOpenAI 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.aio import SearchClient 
+from azure.monitor.opentelemetry import configure_azure_monitor
 
 load_dotenv()
 
+# 1. ACTIVAR MONITOREO (Debe ir antes de cualquier cliente)
+# Esto enviará logs, métricas y trazas automáticamente a Application Insights
+if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+    configure_azure_monitor()
+    logging.info("MLOps: Observabilidad de Azure activada.")
+
+# 2. CONFIGURACIÓN DE CLIENTES (Mapeo de variables de Azure)
+# Ajusté "AZURE_OPENAI_KEY" a "AZURE_OPENAI_API_KEY" para que coincida con tu terminal
 aoai_client = AsyncAzureOpenAI(
-    api_key=os.getenv("AZURE_OPENAI_KEY"),
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"), 
     api_version="2024-08-01-preview",
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
@@ -32,7 +42,7 @@ async def evaluate_rag(question, context, answer):
     """
     
     res = await aoai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
         messages=[{"role": "system", "content": "Eres un experto en MLOps evaluando RAG. Responde solo en JSON."},
                   {"role": "user", "content": eval_prompt}],
         response_format={ "type": "json_object" }
@@ -41,17 +51,19 @@ async def evaluate_rag(question, context, answer):
 
 @cl.on_chat_start
 async def start():
+    logging.info("Sesión de chat iniciada por el usuario.")
     await cl.Message(content="🤖 **Tutor AI-300 + Auditor MLOps**. Ahora evaluaré cada respuesta en tiempo real.").send()
 
 @cl.on_message
 async def main(message: cl.Message):
+    # Inicializamos el cliente de búsqueda dentro del mensaje
     search_client = SearchClient(
         endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"),
         index_name="fuyu-enterprise-index",
         credential=AzureKeyCredential(os.getenv("AZURE_SEARCH_KEY"))
     )
 
-    # 1. Vectorizar
+    # 1. Vectorizar (Usamos el modelo text-embedding-3-large como definiste)
     emb = await aoai_client.embeddings.create(input=message.content, model="text-embedding-3-large")
     
     # 2. Búsqueda Híbrida
@@ -73,7 +85,7 @@ async def main(message: cl.Message):
     full_answer = ""
     
     response = await aoai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
         messages=[
             {"role": "system", "content": "Responde solo basado en el contexto. Cita fuentes como (Fuente 1)."},
             {"role": "user", "content": f"Contexto:\n{context}\n\nPregunta: {message.content}"}
@@ -88,21 +100,26 @@ async def main(message: cl.Message):
             await msg.stream_token(token)
 
     # 4. EVALUACIÓN AUTOMÁTICA
-    evaluation = await evaluate_rag(message.content, context, full_answer)
-    
-    # Preparamos el panel lateral con Fuentes y Métricas
-    eval_text = f"""
-    ### 📊 Métricas de Calidad
-    * **Fidelidad:** {evaluation['fidelidad']}/10
-    * **Relevancia:** {evaluation['relevancia']}/10
-    
-    **Razonamiento:**
-    {evaluation['razonamiento']}
-    """
-    
-    source_elements = [cl.Text(name="⚖️ Evaluación MLOps", content=eval_text, display="side")]
-    for i, text in enumerate(context_list):
-        source_elements.append(cl.Text(name=f"Fuente {i+1}", content=text, display="side"))
+    try:
+        evaluation = await evaluate_rag(message.content, context, full_answer)
+        
+        eval_text = f"""
+### 📊 Métricas de Calidad
+* **Fidelidad:** {evaluation['fidelidad']}/10
+* **Relevancia:** {evaluation['relevancia']}/10
 
-    msg.elements = source_elements
-    await msg.update()
+**Razonamiento:**
+{evaluation['razonamiento']}
+        """
+        
+        source_elements = [cl.Text(name="⚖️ Evaluación MLOps", content=eval_text, display="side")]
+        for i, text in enumerate(context_list):
+            source_elements.append(cl.Text(name=f"Fuente {i+1}", content=text, display="side"))
+
+        msg.elements = source_elements
+        await msg.update()
+        logging.info(f"Respuesta generada y evaluada. Fidelidad: {evaluation['fidelidad']}")
+
+    except Exception as e:
+        logging.error(f"Error en la evaluación: {e}")
+        await cl.ErrorMessage(content="Error al generar métricas de auditoría.").send()

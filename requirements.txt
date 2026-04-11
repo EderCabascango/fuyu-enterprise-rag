@@ -3,3 +3,4 @@ openai
 azure-search-documents
 python-dotenv
 nest_asyncio
+azure-monitor-opentelemetry
