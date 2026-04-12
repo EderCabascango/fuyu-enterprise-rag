@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from openai import AsyncAzureOpenAI 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.aio import SearchClient 
-from azure.monitor.opentelemetry import configure_azure_monitor
+#from azure.monitor.opentelemetry import configure_azure_monitor
 
 # 1. FILTRADO DE LOGS (Crucial para MLOps)
 # Esto silencia el ruido de "Transmission succeeded" que vimos en tu captura
@@ -17,9 +17,9 @@ logging.getLogger("opentelemetry").setLevel(logging.WARNING)
 load_dotenv()
 
 # 2. ACTIVAR MONITOREO
-if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    configure_azure_monitor()
-    logging.info("🚀 MLOps: Telemetría conectada y activa.")
+#if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+#    configure_azure_monitor()
+#    logging.info("🚀 MLOps: Telemetría conectada y activa.")
 
 # Configuración de constantes para evitar errores de "hard-coding"
 MODEL_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
