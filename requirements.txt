@@ -4,3 +4,4 @@ azure-search-documents
 python-dotenv
 nest_asyncio
 azure-monitor-opentelemetry
+azure-identity
