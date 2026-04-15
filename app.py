@@ -47,3 +47,4 @@ async def main(message: cl.Message):
 
     msg.elements = source_elements
     await msg.update()
+    # Versión forzada 4.0 - RBAC activo

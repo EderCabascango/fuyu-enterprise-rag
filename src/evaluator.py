@@ -18,3 +18,4 @@ async def evaluate_rag(client, model, question, context, answer):
     except Exception as e:
         logger.error(f"❌ Error en evaluación: {e}")
         return {"fidelidad": 0, "relevancia": 0, "razonamiento": "Error técnico."}
+    # Sync fix
