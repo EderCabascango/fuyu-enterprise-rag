@@ -4,7 +4,8 @@ import logging
 
 logger = logging.getLogger("fuyu-eval")
 
-async def evaluate_response(client, model, question, context, answer):
+# Cambiamos 'evaluate_response' por 'evaluate_rag'
+async def evaluate_rag(client, model, question, context, answer):
     eval_prompt = f"Evaluación de RAG... Pregunta: {question} | Contexto: {context} | Respuesta: {answer}"
     try:
         res = await client.chat.completions.create(
