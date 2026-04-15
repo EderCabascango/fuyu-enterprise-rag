@@ -1,0 +1,27 @@
+[
+  {
+    "question": "¿Cómo se clasifican las variedades de rosas en el sistema?",
+    "ideal_answer": "Las rosas se clasifican mediante visión artificial analizando el color, el tamaño del botón y el estado de apertura en los frames extraídos del video.",
+    "category": "Proyecto Rosas"
+  },
+  {
+    "question": "¿Qué rol de Azure permite acceder a AI Search sin usar llaves?",
+    "ideal_answer": "Se debe asignar el rol de 'Colaborador de datos de índice de búsqueda' o 'Lector de datos de índice de búsqueda' a la Identidad Administrada.",
+    "category": "Seguridad"
+  },
+  {
+    "question": "¿Cuál es la función del componente RAGEngine en este proyecto?",
+    "ideal_answer": "RAGEngine se encarga de vectorizar la consulta del usuario, buscar contexto relevante en Azure AI Search y conectar con el modelo GPT para generar la respuesta.",
+    "category": "Arquitectura"
+  },
+  {
+    "question": "¿Qué sucede si el auditor devuelve un JSON mal formado?",
+    "ideal_answer": "El sistema utiliza el método .get() para asignar valores por defecto (0) y evitar errores de tipo KeyError, garantizando que la aplicación no se detenga.",
+    "category": "Evaluación"
+  },
+  {
+    "question": "¿Cómo se gestiona la latencia cuando ocurre un error 429?",
+    "ideal_answer": "La librería de OpenAI realiza reintentos automáticos (exponential backoff), lo que puede aumentar el tiempo de respuesta si se supera el límite de tokens por minuto.",
+    "category": "Rendimiento"
+  }
+]
