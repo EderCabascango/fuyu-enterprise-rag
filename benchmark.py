@@ -41,11 +41,37 @@ async def run_benchmark():
             "Razonamiento": eval_result['razonamiento']
         })
 
-    # 4. Exportar a CSV para tu análisis de Data Science
+    # 4. Exportar a CSV para análisis
     df = pd.DataFrame(results)
     df.to_csv("tests/benchmark_results.csv", index=False)
-    print("✅ Benchmark completado. Resultados guardados en tests/benchmark_results.csv")
-    print(f"📊 Promedio Fidelidad: {df['Fidelidad'].mean():.2f}/10")
+    
+    # 5. Generar Reporte Profesional en Markdown
+    avg_fidelidad = df['Fidelidad'].mean()
+    avg_relevancia = df['Relevancia'].mean()
+    
+    report_md = f"""# 📊 Reporte de Benchmark - Fuyu RAG
+Generado automáticamente el: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## 📈 Resumen de Calidad
+| Métrica | Promedio | Meta | Estatus |
+|---------|----------|------|---------|
+| **Fidelidad** | {avg_fidelidad:.2f}/10 | 8.5 | {'✅' if avg_fidelidad >= 8.5 else '⚠️'} |
+| **Relevancia** | {avg_relevancia:.2f}/10 | 9.0 | {'✅' if avg_relevancia >= 9.0 else '⚠️'} |
+
+## 📝 Detalle por Pregunta
+"""
+    for index, row in df.iterrows():
+        report_md += f"### {index + 1}. {row['Pregunta']}\n"
+        report_md += f"- **Audit Scores:** Fidelidad: {row['Fidelidad']} | Relevancia: {row['Relevancia']}\n"
+        report_md += f"- **Razonamiento:** {row['Razonamiento']}\n\n"
+
+    with open("BENCHMARK_REPORT.md", "w", encoding="utf-8") as f:
+        f.write(report_md)
+
+    print("✅ Benchmark completado.")
+    print("📊 Resultados guardados en tests/benchmark_results.csv")
+    print("📋 Reporte profesional generado en BENCHMARK_REPORT.md")
+    print(f"⭐ Promedio Fidelidad: {avg_fidelidad:.2f}/10")
 
 if __name__ == "__main__":
     asyncio.run(run_benchmark())
